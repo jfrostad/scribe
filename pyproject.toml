@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scribe"
+version = "0.1.0"
+description = "Local meeting transcription & analysis tool"
+requires-python = ">=3.11"
+dependencies = [
+    "faster-whisper>=1.1",
+    "sounddevice>=0.5",
+    "soundfile>=0.12",
+    "numpy>=1.26",
+    "anthropic>=0.42",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "pyyaml>=6.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["scribe*"]
+
+[project.scripts]
+scribe = "scribe.cli:main"

@@ -1,0 +1,14 @@
+audio:
+  mic_device: null              # null = system default (Brio 101)
+  system_device: "BlackHole 2ch"
+  sample_rate: 48000
+  channels: 1
+whisper:
+  model_size: small
+  device: auto
+  compute_type: int8
+  language: en
+analysis:
+  model: claude-sonnet-4-20250514
+output:
+  base_dir: recordings
