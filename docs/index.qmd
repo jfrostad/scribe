@@ -1,0 +1,264 @@
+---
+title: "Scribe"
+subtitle: "Local Meeting Transcription & Analysis"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-tools: true
+    self-contained: true
+---
+
+## What it does
+
+Scribe records meetings from two audio streams simultaneously — your microphone and your system audio (remote participants) — then transcribes both with [faster-whisper](https://github.com/SYSTRAN/faster-whisper), merges them into a speaker-labeled transcript, and optionally runs a Claude analysis for summaries, action items, and communication pattern observations.
+
+Everything runs locally. No audio leaves your machine. The only network call is the optional Claude analysis step, which sends the text transcript (not audio) to the Anthropic API.
+
+```
+Audio capture → WAV files → Whisper transcription → Speaker-labeled markdown → Claude analysis
+```
+
+## Architecture
+
+### Two-stream diarization
+
+Instead of ML-based speaker diarization (pyannote-audio, etc.), Scribe uses a simpler approach: **two separate audio streams**.
+
+| Stream | Source | Speaker label |
+|--------|--------|---------------|
+| Mic | Brio 101 / MacBook mic | **You** |
+| System audio | BlackHole 2ch loopback | **Remote** |
+
+Each stream is transcribed independently, then segments are merged chronologically. This gives reliable speaker separation without GPU-heavy diarization models.
+
+### Recording pipeline
+
+The recorder uses `sounddevice` InputStreams with a **queue-based writer thread** per stream. Audio chunks flow from the callback into a queue, and a dedicated thread drains the queue to a WAV file via `soundfile`. This avoids buffering hours of audio in memory.
+
+```{python}
+#| eval: false
+# Simplified flow
+mic_stream → callback → queue → writer_thread → mic.wav
+sys_stream → callback → queue → writer_thread → system.wav
+```
+
+### Transcription
+
+Ported from a proven faster-whisper setup. Key settings:
+
+- **VAD filtering** with 500ms silence threshold — skips dead air
+- **Word-level timestamps** — enables precise segment alignment
+- **Lazy-loaded model singleton** — loads once, reuses across transcriptions
+- **int8 quantization** — fast inference on CPU/Apple Silicon
+
+### Output format
+
+Each session produces a directory:
+
+```
+recordings/2026-03-22_standup/
+├── mic.wav              # Your audio
+├── system.wav           # Remote participants
+├── transcript.md        # Human-readable, Claude-ready
+├── transcript.meta.json # Structured data (timestamps, words, confidence)
+└── analysis.md          # Claude's meeting analysis
+```
+
+The markdown transcript is designed to be directly usable as context in Claude Code sessions:
+
+```markdown
+# standup
+**Date:** 2026-03-22 09:05
+**Duration:** 12:34
+
+---
+
+**[00:00:12] You:**
+Morning. Quick update on the auth migration...
+
+**[00:00:28] Remote:**
+Got it. Where are we on the token rotation piece?
+```
+
+## Installation
+
+### Prerequisites
+
+- Python 3.11+
+- [BlackHole 2ch](https://existential.audio/blackhole/) for system audio capture
+- An Anthropic API key (for the `analyze` command only)
+
+### Setup
+
+```bash
+cd tools/scribe
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+### BlackHole configuration
+
+BlackHole is a virtual audio driver that creates a loopback device. System audio gets routed through it so Scribe can capture what remote participants are saying.
+
+1. **Install**: `brew install --cask blackhole-2ch`
+2. **Reboot** (required for the audio driver to load)
+3. **Create a Multi-Output Device** in Audio MIDI Setup:
+   - Open: `open -a "Audio MIDI Setup"`
+   - Click **+** → **Create Multi-Output Device**
+   - Check your speakers/headphones **and** BlackHole 2ch
+   - Ensure your speakers are the top (master) device
+4. **Set system output** to the Multi-Output Device in System Settings → Sound
+
+This routes audio to both your speakers and BlackHole simultaneously. Scribe reads from the BlackHole device.
+
+::: {.callout-tip}
+For Teams-only meetings, the `Microsoft Teams Audio` virtual device may work as an alternative to BlackHole, without the Multi-Output Device setup.
+:::
+
+### Environment
+
+Create a `.env` file in the project root:
+
+```bash
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+```
+
+## CLI Reference
+
+### `scribe devices`
+
+Lists all audio input devices. Useful for verifying BlackHole is visible and finding device names for `config.yaml`.
+
+```bash
+$ scribe devices
+Audio devices:
+  [0] LG ULTRAWIDE (out:2ch)
+  [1] Brio 101 (in:1ch) *
+  [2] MacBook Pro Microphone (in:1ch)
+  [3] MacBook Pro Speakers (out:2ch)
+  [4] BlackHole 2ch (in:2ch, out:2ch)
+  [5] Microsoft Teams Audio (in:1ch, out:1ch)
+```
+
+The `*` marks the current default input device.
+
+### `scribe record [--name NAME]`
+
+Starts dual-stream recording. Press **Ctrl+C** to stop.
+
+```bash
+scribe record --name standup
+# Recording to: recordings/2026-03-22_standup
+# Press Ctrl+C to stop.
+```
+
+Creates `mic.wav` and `system.wav` in the session directory.
+
+### `scribe transcribe SESSION_DIR`
+
+Runs faster-whisper on both audio files, merges segments by timestamp, and writes `transcript.md` + `transcript.meta.json`.
+
+```bash
+scribe transcribe recordings/2026-03-22_standup
+```
+
+### `scribe analyze SESSION_DIR`
+
+Sends `transcript.md` to Claude and writes `analysis.md` with:
+
+- Meeting summary
+- Key discussion points
+- Action items (with owner attribution)
+- Decisions made
+- Speaking pattern observations
+- Follow-up notes
+
+```bash
+scribe analyze recordings/2026-03-22_standup
+```
+
+### `scribe run [--name NAME]`
+
+Full pipeline: **record → transcribe → analyze** in one command. Press Ctrl+C to stop recording; transcription and analysis run automatically.
+
+```bash
+scribe run --name interview
+```
+
+### `scribe setup`
+
+Prints BlackHole installation and configuration instructions.
+
+## Configuration
+
+All settings live in `config.yaml`:
+
+```yaml
+audio:
+  mic_device: null              # null = system default
+  system_device: "BlackHole 2ch"
+  sample_rate: 48000
+  channels: 1
+
+whisper:
+  model_size: small             # tiny, base, small, medium, large-v3
+  device: auto                  # auto, cpu, cuda
+  compute_type: int8            # int8, float16, float32
+  language: en                  # null for auto-detect
+
+analysis:
+  model: claude-sonnet-4-20250514
+
+output:
+  base_dir: recordings
+```
+
+### Whisper model sizes
+
+| Model | Parameters | Speed | Accuracy | RAM |
+|-------|-----------|-------|----------|-----|
+| tiny | 39M | Fastest | Lower | ~1 GB |
+| base | 74M | Fast | OK | ~1 GB |
+| **small** | 244M | Good | **Good** | ~2 GB |
+| medium | 769M | Slower | Better | ~5 GB |
+| large-v3 | 1.5B | Slowest | Best | ~10 GB |
+
+`small` is the default — good accuracy/speed tradeoff for meetings.
+
+## Use cases
+
+### Post-meeting context for Claude Code
+
+Feed `transcript.md` directly into a Claude Code session to give it full meeting context:
+
+```bash
+# After a design review meeting
+cat recordings/2026-03-22_design-review/transcript.md
+# Then reference decisions in your coding session
+```
+
+### Communication self-improvement
+
+The `analysis.md` includes speaking pattern observations — useful for interview prep, presentation practice, or noticing tendencies like talking too much or not asking enough questions.
+
+### Meeting accountability
+
+Action items are extracted with owner attribution (`You` / `Remote` / `Both`), making it easy to track commitments without manual note-taking.
+
+## Dependencies
+
+Minimal by design — no librosa, no spacy, no FastAPI, no database.
+
+| Package | Purpose |
+|---------|---------|
+| faster-whisper | Local speech-to-text (CTranslate2 backend) |
+| sounddevice | Audio stream capture via PortAudio |
+| soundfile | WAV file I/O |
+| numpy | Audio buffer handling |
+| anthropic | Claude API client |
+| pydantic / pydantic-settings | Config validation + env loading |
+| pyyaml | Config file parsing |
