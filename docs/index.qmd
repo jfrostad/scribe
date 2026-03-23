@@ -189,6 +189,40 @@ Full pipeline: **record → transcribe → analyze** in one command. Press Ctrl+
 scribe run --name interview
 ```
 
+### `scribe watch`
+
+Background daemon that auto-detects active Zoom/Teams calls, records them, and runs the full transcribe → analyze pipeline when the call ends.
+
+```bash
+# Run in foreground
+scribe watch
+
+# Skip post-processing
+scribe watch --no-transcribe --no-analyze
+```
+
+**Detection strategy:**
+
+- **Zoom**: checks for the `CptHost` process, which only exists during active calls
+- **Teams**: checks if the SlimCore media module has connected UDP sockets to relay servers (idle Teams only has an unconnected listener)
+
+Polls every 5 seconds. Sessions are named automatically (e.g., `2026-03-22_teams-1430`).
+
+#### Running as a login service
+
+A launchd plist is included to run the watcher automatically at login:
+
+```bash
+ln -s ~/Documents/work/tools/scribe/com.jfrostad.scribe-watch.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.jfrostad.scribe-watch.plist
+```
+
+Logs go to `recordings/scribe-watch.log`. To stop:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.jfrostad.scribe-watch.plist
+```
+
 ### `scribe setup`
 
 Prints BlackHole installation and configuration instructions.

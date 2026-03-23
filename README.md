@@ -51,7 +51,23 @@ Run `scribe setup` for detailed instructions.
 | `scribe transcribe SESSION_DIR` | Transcribe → markdown + JSON |
 | `scribe analyze SESSION_DIR` | Claude analysis → action items, summary |
 | `scribe run --name NAME` | Record → transcribe → analyze |
+| `scribe watch` | Auto-record Zoom/Teams calls (daemon) |
 | `scribe setup` | BlackHole setup instructions |
+
+## Auto-recording
+
+`scribe watch` runs as a background daemon that detects active Zoom/Teams calls and automatically records, transcribes, and analyzes them.
+
+```bash
+# Run manually
+scribe watch
+
+# Or install as a login service (auto-starts on boot)
+ln -s ~/Documents/work/tools/scribe/com.jfrostad.scribe-watch.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.jfrostad.scribe-watch.plist
+```
+
+Detection: polls every 5s for Zoom's `CptHost` process or Teams SlimCore connected UDP media streams. Logs to `recordings/scribe-watch.log`.
 
 ## Docs
 

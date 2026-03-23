@@ -241,6 +241,26 @@ def cmd_run(args: argparse.Namespace) -> None:
     print(f"\nDone! Session: {session_dir}")
 
 
+def cmd_watch(args: argparse.Namespace) -> None:
+    """Watch for Zoom/Teams calls and auto-record."""
+    from scribe.watcher import watch
+
+    config = load_config()
+
+    print("Scribe watcher started.")
+    print("Will auto-record when Zoom or Teams calls are detected.")
+    print("Press Ctrl+C to stop.\n")
+
+    try:
+        watch(
+            config,
+            transcribe_after=not args.no_transcribe,
+            analyze_after=not args.no_analyze,
+        )
+    except KeyboardInterrupt:
+        print("\nWatcher stopped.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="scribe",
@@ -274,6 +294,17 @@ def main() -> None:
     p_run = sub.add_parser("run", help="Record → transcribe → analyze")
     p_run.add_argument("--name", "-n", default=None, help="Session name")
 
+    # watch
+    p_watch = sub.add_parser("watch", help="Auto-record Zoom/Teams calls")
+    p_watch.add_argument(
+        "--no-transcribe", action="store_true",
+        help="Skip auto-transcription after recording",
+    )
+    p_watch.add_argument(
+        "--no-analyze", action="store_true",
+        help="Skip auto-analysis after transcription",
+    )
+
     args = parser.parse_args()
 
     # Logging
@@ -291,6 +322,7 @@ def main() -> None:
         "transcribe": cmd_transcribe,
         "analyze": cmd_analyze,
         "run": cmd_run,
+        "watch": cmd_watch,
     }
 
     if args.command in commands:

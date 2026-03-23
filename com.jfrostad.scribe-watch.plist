@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jfrostad.scribe-watch</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/jf/Documents/work/tools/scribe/.venv/bin/scribe</string>
+        <string>watch</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/jf/Documents/work/tools/scribe</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/jf/Documents/work/tools/scribe/recordings/scribe-watch.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/jf/Documents/work/tools/scribe/recordings/scribe-watch.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/jf/Documents/work/tools/scribe/.venv/bin:/usr/local/bin:/usr/sbin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>
