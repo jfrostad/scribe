@@ -1,0 +1,43 @@
+{% for s in sessions %}
+<a href="/sessions/{{ s.dir_name }}" style="text-decoration: none; color: inherit; display: block;">
+<div class="card session-card" style="cursor: pointer; transition: border-color 0.15s;"
+     onmouseenter="this.style.borderColor='var(--accent-dim)'"
+     onmouseleave="this.style.borderColor='var(--border)'">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+            <span style="color: var(--text-bright);">{{ s.session_name }}</span>
+            {% if s.meta.meeting_type %}
+            <span class="dim" style="margin-left: 0.5rem;">{{ s.meta.meeting_type }}</span>
+            {% endif %}
+            {% if s.meta.project %}
+            <span class="dim" style="margin-left: 0.5rem;">[{{ s.meta.project }}]</span>
+            {% endif %}
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            {% if s.meta.starred %}<span style="color: var(--accent);">&#9733;</span>{% endif %}
+            <span class="dim">{{ s.date[:10] if s.date else "" }} &middot; {{ format_duration(s.duration_secs) }}</span>
+        </div>
+    </div>
+    {% if s.analysis_summary %}
+    <p class="dim" style="margin-top: 0.4rem; font-style: italic;">{{ s.analysis_summary[:150] }}{% if s.analysis_summary|length > 150 %}...{% endif %}</p>
+    {% endif %}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+        <div>
+            {% for tag in s.meta.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+        </div>
+        {% set total = s.you_duration + s.remote_duration %}
+        {% if total > 0 %}
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div class="speaking-bar" style="width: 60px;">
+                <div class="you" style="width: {{ (s.you_duration / total * 100)|round }}%;"></div>
+                <div class="remote" style="width: {{ (s.remote_duration / total * 100)|round }}%;"></div>
+            </div>
+            <span class="dim" style="font-size: 0.7rem;">{{ s.word_count }}w</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+</a>
+{% else %}
+<div class="card"><p class="dim">No sessions match your filters.</p></div>
+{% endfor %}

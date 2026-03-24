@@ -1,0 +1,41 @@
+{% if editing is defined and editing %}
+<!-- Edit mode -->
+<div style="display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center;"
+     onclick="event.stopPropagation()">
+    {% for tag in session.meta.tags %}
+    <span class="tag">
+        {{ tag }}
+        <span class="tag-remove"
+              onclick="event.stopPropagation();
+                       let tags = {{ session.meta.tags|tojson }}.filter(t => t !== '{{ tag }}');
+                       fetch('/api/sessions/{{ session.dir_name }}', {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tags:tags})})
+                       .then(() => htmx.ajax('GET', '/api/fragments/tag-editor/{{ session.dir_name }}', {target:'#tag-area', swap:'innerHTML'}))">
+            &times;
+        </span>
+    </span>
+    {% endfor %}
+    <input type="text" placeholder="add tag..." style="width: 100px; font-size: 0.7rem; padding: 0.1rem 0.4rem;"
+           onkeydown="if(event.key==='Enter'){
+               event.preventDefault();
+               event.stopPropagation();
+               let tags = {{ session.meta.tags|tojson }};
+               let v = this.value.trim();
+               if(v && !tags.includes(v)){
+                   tags.push(v);
+                   fetch('/api/sessions/{{ session.dir_name }}', {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tags:tags})})
+                   .then(() => htmx.ajax('GET', '/api/fragments/tag-editor/{{ session.dir_name }}', {target:'#tag-area', swap:'innerHTML'}));
+               }
+           }">
+    <span class="dim" style="font-size: 0.65rem; margin-left: 0.25rem;">enter to add, click &times; to remove</span>
+</div>
+{% else %}
+<!-- Display mode -->
+<div style="display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; cursor: pointer;" title="click to edit tags">
+    {% for tag in session.meta.tags %}
+    <span class="tag">{{ tag }}</span>
+    {% endfor %}
+    {% if not session.meta.tags %}
+    <span class="dim" style="font-size: 0.7rem;">+ add tags</span>
+    {% endif %}
+</div>
+{% endif %}

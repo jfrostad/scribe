@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div id="stats-area" hx-get="/api/fragments/stats" hx-trigger="every 30s" hx-swap="innerHTML">
+{% include "fragments/stats_cards.html" %}
+</div>
+
+<div class="grid grid-2" style="margin-top: 1.5rem;">
+    <div>
+        <h2>Recent Sessions</h2>
+        {% for s in recent %}
+        <a href="/sessions/{{ s.dir_name }}" style="text-decoration: none; color: inherit; display: block;">
+        <div class="card session-card" style="cursor: pointer; transition: border-color 0.15s;"
+             onmouseenter="this.style.borderColor='var(--accent-dim)'"
+             onmouseleave="this.style.borderColor='var(--border)'">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <span style="color: var(--text-bright);">{{ s.session_name }}</span>
+                    {% if s.meta.meeting_type %}
+                    <span class="dim" style="margin-left: 0.5rem;">{{ s.meta.meeting_type }}</span>
+                    {% endif %}
+                </div>
+                <span class="dim">{{ s.date[:10] if s.date else "" }} &middot; {{ format_duration(s.duration_secs) }}</span>
+            </div>
+            {% if s.analysis_summary %}
+            <p class="dim" style="margin-top: 0.4rem; font-style: italic;">{{ s.analysis_summary[:120] }}{% if s.analysis_summary|length > 120 %}...{% endif %}</p>
+            {% endif %}
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+                <div>
+                    {% for tag in s.meta.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+                </div>
+                {% set total = s.you_duration + s.remote_duration %}
+                {% if total > 0 %}
+                <div class="speaking-bar" style="width: 60px;">
+                    <div class="you" style="width: {{ (s.you_duration / total * 100)|round }}%;"></div>
+                    <div class="remote" style="width: {{ (s.remote_duration / total * 100)|round }}%;"></div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        </a>
+        {% else %}
+        <div class="card"><p class="dim">No sessions yet. Start a meeting and let the watcher do its thing.</p></div>
+        {% endfor %}
+    </div>
+
+    <div>
+        <h2>Open Action Items</h2>
+        {% for item in open_actions %}
+        <div class="card session-card">
+            <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+                <input type="checkbox"
+                       hx-patch="/api/sessions/{{ item.session.dir_name }}/actions/{{ item.action.id }}"
+                       hx-headers='{"Content-Type": "application/json"}'
+                       hx-vals='{"status": "done"}'
+                       hx-swap="none"
+                       style="margin-top: 0.3rem; cursor: pointer;">
+                <div>
+                    <span>{{ item.action.text }}</span>
+                    {% if item.action.owner %}
+                    <span class="owner-pill {{ item.action.owner|lower }}">{{ item.action.owner }}</span>
+                    {% endif %}
+                    <div class="dim" style="margin-top: 0.2rem;">
+                        <a href="/sessions/{{ item.session.dir_name }}">{{ item.session.session_name }}</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card"><p class="dim">No open action items.</p></div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}

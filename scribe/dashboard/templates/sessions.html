@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h2 style="margin-bottom: 0;">Sessions ({{ sessions|length }})</h2>
+    <input type="search" name="q" placeholder="search sessions..."
+           value="{{ filter_q }}"
+           hx-get="/api/fragments/session-list"
+           hx-trigger="keyup changed delay:300ms"
+           hx-target="#session-list"
+           hx-swap="innerHTML"
+           style="width: 250px;">
+</div>
+
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center;">
+    <span class="dim">type:</span>
+    <a href="/sessions" class="btn {{ 'active' if not filter_type }}">all</a>
+    {% for t in ['standup', '1:1', 'planning', 'retro', 'external'] %}
+    <a href="/sessions?type={{ t }}{% if filter_tag %}&tag={{ filter_tag }}{% endif %}" class="btn {{ 'active' if filter_type == t }}">{{ t }}</a>
+    {% endfor %}
+
+    {% if all_tags %}
+    <span class="dim" style="margin-left: 1rem;">tag:</span>
+    <a href="/sessions{% if filter_type %}?type={{ filter_type }}{% endif %}" class="btn {{ 'active' if not filter_tag }}">all</a>
+    {% for tag in all_tags[:10] %}
+    <a href="/sessions?tag={{ tag }}{% if filter_type %}&type={{ filter_type }}{% endif %}" class="btn {{ 'active' if filter_tag == tag }}">{{ tag }}</a>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<div id="session-list">
+{% include "fragments/session_card.html" %}
+</div>
+
+{% endblock %}

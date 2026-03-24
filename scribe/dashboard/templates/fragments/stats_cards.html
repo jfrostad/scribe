@@ -1,0 +1,14 @@
+<div class="grid grid-3">
+    <div class="card">
+        <div class="stat-label">sessions</div>
+        <div class="stat-value">{{ stats.total_sessions }}</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">hours recorded</div>
+        <div class="stat-value">{{ "%.1f"|format(stats.total_duration_hours) }}</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">open actions</div>
+        <div class="stat-value">{{ stats.open_actions }}</div>
+    </div>
+</div>

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Analytics</h2>
+
+<div class="grid grid-3" style="margin-bottom: 1.5rem;">
+    <div class="card">
+        <div class="stat-label">total sessions</div>
+        <div class="stat-value">{{ stats.total_sessions }}</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">hours recorded</div>
+        <div class="stat-value">{{ "%.1f"|format(stats.total_duration_hours) }}</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">action items</div>
+        <div class="stat-value">{{ stats.open_actions }}</div>
+        <div class="dim">open of {{ stats.total_actions }}</div>
+    </div>
+</div>
+
+<div class="grid grid-2">
+    <!-- Speaking Ratio Trend -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Speaking Ratio by Session</h3>
+            <div>
+                <span class="speaker-you" style="font-size: 0.7rem;">&#9632; you</span>
+                <span class="speaker-remote" style="font-size: 0.7rem; margin-left: 0.5rem;">&#9632; remote</span>
+            </div>
+        </div>
+        {% for d in speaking_data %}
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
+            <span class="dim" style="width: 70px; flex-shrink: 0; font-size: 0.7rem; text-align: right;">{{ d.date[5:] }}</span>
+            <div class="speaking-bar" style="flex: 1; height: 8px;">
+                <div class="you" style="width: {{ d.you_pct|round(1) }}%;"></div>
+                <div class="remote" style="width: {{ d.remote_pct|round(1) }}%;"></div>
+            </div>
+            <span class="dim" style="width: 50px; flex-shrink: 0; font-size: 0.7rem;">{{ format_duration(d.duration_secs) }}</span>
+        </div>
+        {% else %}
+        <p class="dim">No sessions with speaking data yet.</p>
+        {% endfor %}
+    </div>
+
+    <!-- Duration Trend -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Session Duration</h3>
+        </div>
+        {% set max_dur = speaking_data|map(attribute='duration_secs')|max if speaking_data else 1 %}
+        <div style="display: flex; align-items: flex-end; gap: 3px; height: 120px; padding-top: 0.5rem;">
+            {% for d in speaking_data %}
+            {% set pct = (d.duration_secs / max_dur * 100) if max_dur > 0 else 0 %}
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%;"
+                 title="{{ d.name }} — {{ format_duration(d.duration_secs) }}">
+                <div style="width: 100%; max-width: 20px; height: {{ pct }}%; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px;"></div>
+            </div>
+            {% endfor %}
+        </div>
+        {% if speaking_data %}
+        <div style="display: flex; justify-content: space-between; margin-top: 0.3rem;">
+            <span class="dim" style="font-size: 0.65rem;">{{ speaking_data[0].date[5:] if speaking_data else '' }}</span>
+            <span class="dim" style="font-size: 0.65rem;">{{ speaking_data[-1].date[5:] if speaking_data else '' }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Top Tags -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Tag Distribution</h3>
+        </div>
+        {% if stats.tag_counts %}
+        {% set max_tag = stats.tag_counts[0][1] if stats.tag_counts else 1 %}
+        {% for tag, count in stats.tag_counts %}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+            <span class="tag">{{ tag }}</span>
+            <div style="flex: 1; margin: 0 0.75rem;">
+                <div style="height: 3px; background: var(--border); border-radius: 1px;">
+                    <div style="height: 100%; width: {{ (count / max_tag * 100) }}%; background: var(--accent); border-radius: 1px;"></div>
+                </div>
+            </div>
+            <span class="dim">{{ count }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="dim">No tags yet. Tag sessions to see distribution.</p>
+        {% endif %}
+    </div>
+
+    <!-- Meeting Types -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Meeting Types</h3>
+        </div>
+        {% if stats.type_counts %}
+        {% set max_type = stats.type_counts[0][1] if stats.type_counts else 1 %}
+        {% for mtype, count in stats.type_counts %}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+            <span class="dim" style="font-size: 0.8rem;">{{ mtype }}</span>
+            <div style="flex: 1; margin: 0 0.75rem;">
+                <div style="height: 3px; background: var(--border); border-radius: 1px;">
+                    <div style="height: 100%; width: {{ (count / max_type * 100) }}%; background: var(--accent-blue); border-radius: 1px;"></div>
+                </div>
+            </div>
+            <span class="dim">{{ count }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="dim">No meeting types set yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

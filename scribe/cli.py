@@ -261,6 +261,18 @@ def cmd_watch(args: argparse.Namespace) -> None:
         print("\nWatcher stopped.")
 
 
+def cmd_dashboard(args: argparse.Namespace) -> None:
+    """Start the dashboard web server."""
+    import uvicorn
+    from scribe.dashboard.app import create_app
+
+    config = load_config()
+    app = create_app(config)
+
+    print(f"Starting dashboard at http://{config.dashboard.host}:{config.dashboard.port}")
+    uvicorn.run(app, host=config.dashboard.host, port=config.dashboard.port, log_level="info")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="scribe",
@@ -305,6 +317,11 @@ def main() -> None:
         help="Skip auto-analysis after transcription",
     )
 
+    # dashboard
+    p_dash = sub.add_parser("dashboard", help="Start the dashboard web server")
+    p_dash.add_argument("--host", default=None, help="Host to bind to")
+    p_dash.add_argument("--port", "-p", type=int, default=None, help="Port to bind to")
+
     args = parser.parse_args()
 
     # Logging
@@ -323,6 +340,7 @@ def main() -> None:
         "analyze": cmd_analyze,
         "run": cmd_run,
         "watch": cmd_watch,
+        "dashboard": cmd_dashboard,
     }
 
     if args.command in commands:

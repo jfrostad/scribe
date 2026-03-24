@@ -50,11 +50,17 @@ class EnvConfig(BaseSettings):
     model_config = {"env_file": str(PROJECT_ROOT / ".env"), "extra": "ignore"}
 
 
+class DashboardConfig(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = 8000
+
+
 class AppConfig(BaseModel):
     audio: AudioConfig = Field(default_factory=AudioConfig)
     whisper: WhisperConfig = Field(default_factory=WhisperConfig)
     analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
+    dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
     env: EnvConfig = Field(default_factory=EnvConfig)
 
     @property

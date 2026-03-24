@@ -2,9 +2,12 @@
 
 Detection strategy:
 - Zoom: look for CptHost process (only exists during active calls)
-- Teams: check if the SlimCore media module has connected UDP sockets
-  (idle Teams has a single unconnected UDP listener; active calls open
-  connected UDP streams to media relay servers)
+- Teams: count UDP sockets on the main MSTeams process. Idle Teams has
+  ~1 UDP socket; an active call opens 10+ for media relay. Threshold
+  of 4 avoids false positives.
+
+Uses a grace period (consecutive "no call" polls) before stopping,
+to handle brief detection gaps mid-call.
 
 Polls every few seconds. When a call is detected, starts recording.
 When the call ends, stops recording and kicks off transcribe + analyze.
@@ -23,6 +26,10 @@ from scribe.config import AppConfig
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL = 5  # seconds
+# Require this many consecutive "no call" polls before declaring call ended
+END_GRACE_POLLS = 6  # 30 seconds grace period
+# Idle Teams has ~1 UDP socket; active call has 10+
+TEAMS_UDP_THRESHOLD = 4
 
 
 def _detect_zoom_call() -> bool:
@@ -35,34 +42,28 @@ def _detect_zoom_call() -> bool:
 
 
 def _detect_teams_call() -> bool:
-    """Check if Teams has an active call via SlimCore connected UDP sockets.
+    """Check if Teams has an active call via UDP socket count.
 
-    When idle, SlimCore has ~1 unconnected UDP socket (listening on *:port).
-    During a call, it opens multiple connected UDP sockets to media relays,
-    shown in lsof as UDP connections with a remote address (->).
+    The main MSTeams process opens many UDP sockets for media relay
+    during a call (~10-15). When idle, it has ~1.
     """
-    # Get SlimCore PID
-    pgrep = subprocess.run(
-        ["pgrep", "-f", "SlimCore"],
+    result = subprocess.run(
+        ["pgrep", "-x", "MSTeams"],
         capture_output=True,
         text=True,
     )
-    if pgrep.returncode != 0:
+    if result.returncode != 0:
         return False
 
-    pid = pgrep.stdout.strip().split("\n")[0]
+    pid = result.stdout.strip().split("\n")[0]
 
-    # Check SlimCore's own FDs for connected UDP sockets
-    # (have "->" indicating a remote peer for media streaming)
     lsof = subprocess.run(
-        ["lsof", "-p", pid],
+        ["/usr/sbin/lsof", "-i", "UDP", "-a", "-p", pid],
         capture_output=True,
         text=True,
     )
-    for line in lsof.stdout.splitlines():
-        if "UDP" in line and "->" in line:
-            return True
-    return False
+    udp_count = sum(1 for line in lsof.stdout.splitlines() if "UDP" in line)
+    return udp_count >= TEAMS_UDP_THRESHOLD
 
 
 def _detect_active_call() -> str | None:
@@ -111,9 +112,17 @@ def watch(config: AppConfig, transcribe_after: bool = True, analyze_after: bool 
             time.sleep(POLL_INTERVAL)
             continue
 
-        # Wait for the call to end
-        while _detect_active_call() is not None:
+        # Wait for the call to end (with grace period to handle flickers)
+        no_call_count = 0
+        while True:
             time.sleep(POLL_INTERVAL)
+            if _detect_active_call() is not None:
+                no_call_count = 0
+            else:
+                no_call_count += 1
+                if no_call_count >= END_GRACE_POLLS:
+                    break
+                logger.debug(f"No call detected ({no_call_count}/{END_GRACE_POLLS}), waiting...")
 
         # Call ended — stop recording
         recorder.stop()

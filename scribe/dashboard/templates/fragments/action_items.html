@@ -1,0 +1,36 @@
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h3>Action Items</h3>
+        <span class="dim">{{ session.meta.action_items|selectattr('status', 'eq', 'open')|list|length }} open</span>
+    </div>
+    {% for action in session.meta.action_items %}
+    <div id="action-{{ action.id }}">
+    {% include "fragments/action_item_row.html" %}
+    </div>
+    {% endfor %}
+    {% if not session.meta.action_items %}
+    <p class="dim">No action items.</p>
+    {% endif %}
+    <!-- Add new -->
+    <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+        <input type="text" id="new-action-text" placeholder="add action item..." style="flex: 1;">
+        <select id="new-action-owner" style="width: 80px;">
+            <option value="You">You</option>
+            <option value="Remote">Remote</option>
+            <option value="Both">Both</option>
+        </select>
+        <button class="btn"
+                onclick="
+                    const text = document.getElementById('new-action-text').value;
+                    if (!text) return;
+                    fetch('/api/sessions/{{ session.dir_name }}/actions', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'HX-Request': 'true'},
+                        body: JSON.stringify({text: text, owner: document.getElementById('new-action-owner').value})
+                    }).then(r => r.text()).then(html => {
+                        document.getElementById('action-items-area').innerHTML = html;
+                    })">
+            add
+        </button>
+    </div>
+</div>

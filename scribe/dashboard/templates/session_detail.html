@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div style="margin-bottom: 1rem;">
+    <a href="/sessions" class="dim" style="text-decoration: none;">&larr; sessions</a>
+</div>
+
+<!-- Header card -->
+<div class="card" style="margin-bottom: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+            <span style="font-size: 1.1rem; color: var(--text-bright);">{{ session.session_name }}</span>
+            <span class="dim" style="margin-left: 0.75rem;">{{ session.date }}</span>
+            <span class="dim">&middot; {{ format_duration(session.duration_secs) }}</span>
+            <span class="dim">&middot; {{ session.word_count }} words</span>
+        </div>
+        <button class="star-btn {{ 'starred' if session.meta.starred }}"
+                onclick="fetch('/api/sessions/{{ session.dir_name }}', {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({starred:!{{ 'true' if session.meta.starred else 'false' }}})}).then(()=>{this.classList.toggle('starred')})">
+            &#9733;
+        </button>
+    </div>
+    <div style="display: flex; gap: 1rem; align-items: center; margin-top: 0.75rem; flex-wrap: wrap;">
+        <div>
+            <span class="dim">type:</span>
+            <select onchange="fetch('/api/sessions/{{ session.dir_name }}',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({meeting_type:this.value})})"
+                    style="margin-left: 0.25rem;">
+                <option value="" {{ 'selected' if not session.meta.meeting_type }}>uncategorized</option>
+                {% for t in ['standup', '1:1', 'planning', 'retro', 'external', 'interview'] %}
+                <option value="{{ t }}" {{ 'selected' if session.meta.meeting_type == t }}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <span class="dim">project:</span>
+            <input type="text" value="{{ session.meta.project }}" placeholder="project name"
+                   onblur="fetch('/api/sessions/{{ session.dir_name }}',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:this.value})})"
+                   style="width: 140px; margin-left: 0.25rem;">
+        </div>
+    </div>
+    <!-- Tags -->
+    <div id="tag-area" style="margin-top: 0.75rem;"
+         hx-get="/api/fragments/tag-editor/{{ session.dir_name }}"
+         hx-trigger="click"
+         hx-target="#tag-area"
+         hx-swap="innerHTML">
+        {% include "fragments/tag_editor.html" %}
+    </div>
+</div>
+
+<!-- Speaking Pattern -->
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h3>Speaking Pattern</h3>
+    </div>
+    <div class="speaking-bar" style="height: 12px; margin-bottom: 0.75rem;">
+        <div class="you" style="width: {{ you_pct|round(1) }}%;"></div>
+        <div class="remote" style="width: {{ remote_pct|round(1) }}%;"></div>
+    </div>
+    <div class="grid grid-2" style="gap: 0.5rem;">
+        <div>
+            <span class="speaker-you">You</span>
+            <span class="dim">&middot; {{ "%.0f"|format(you_pct) }}%</span>
+            <span class="dim">&middot; {{ session.you_words }} words</span>
+            <span class="dim">&middot; {{ format_duration(session.you_duration) }}</span>
+        </div>
+        <div>
+            <span class="speaker-remote">Remote</span>
+            <span class="dim">&middot; {{ "%.0f"|format(remote_pct) }}%</span>
+            <span class="dim">&middot; {{ session.remote_words }} words</span>
+            <span class="dim">&middot; {{ format_duration(session.remote_duration) }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis -->
+<div id="analysis-section">
+{% include "fragments/analysis_section.html" %}
+</div>
+
+<!-- Action Items -->
+<div id="action-items-area">
+{% include "fragments/action_items.html" %}
+</div>
+
+<!-- Custom Analyses -->
+{% for ca in custom_analyses_html %}
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h3>Custom Analysis</h3>
+        <span class="dim">{{ ca.created_at[:16] }}</span>
+    </div>
+    <p class="dim" style="font-style: italic; margin-bottom: 0.5rem;">{{ ca.prompt }}</p>
+    <div class="analysis-content">{{ ca.result_html|safe }}</div>
+</div>
+{% endfor %}
+
+<!-- Custom Analysis Input -->
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h3>Run Custom Analysis</h3>
+    </div>
+    <textarea id="custom-prompt" placeholder="e.g., Extract all technical decisions and their rationale..."></textarea>
+    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; align-items: center;">
+        <button class="btn"
+                onclick="
+                    const prompt = document.getElementById('custom-prompt').value;
+                    if (!prompt) return;
+                    this.textContent = 'analyzing...';
+                    this.disabled = true;
+                    fetch('/api/sessions/{{ session.dir_name }}/custom-analyze', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({prompt: prompt})
+                    }).then(r => r.text()).then(html => {
+                        const div = document.createElement('div');
+                        div.innerHTML = html;
+                        document.getElementById('analysis-section').after(div);
+                        document.getElementById('custom-prompt').value = '';
+                        this.textContent = 'run';
+                        this.disabled = false;
+                    })">
+            run
+        </button>
+    </div>
+</div>
+
+<!-- Transcript -->
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h3>Transcript</h3>
+        <span class="dim">{{ session.timeline|length }} segments</span>
+    </div>
+    {% for seg in session.timeline %}
+    <div class="timeline-segment">
+        <span class="timeline-ts">[{{ format_duration(seg.start) }}]</span>
+        <span class="{{ 'speaker-you' if seg.speaker == 'You' else 'speaker-remote' }}" style="font-weight: 600;">{{ seg.speaker }}:</span>
+        <span style="margin-left: 0.25rem;">{{ seg.text }}</span>
+    </div>
+    {% else %}
+    <p class="dim">No transcript available.</p>
+    {% endfor %}
+</div>
+
+{% endblock %}

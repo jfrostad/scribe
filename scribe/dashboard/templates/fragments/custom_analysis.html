@@ -1,0 +1,8 @@
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h3>Custom Analysis</h3>
+        <span class="dim">{{ ca.created_at[:16] }}</span>
+    </div>
+    <p class="dim" style="font-style: italic; margin-bottom: 0.5rem;">{{ ca.prompt }}</p>
+    <div class="analysis-content">{{ ca.result_html|safe }}</div>
+</div>

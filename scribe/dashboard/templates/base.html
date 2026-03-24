@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scribe</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        :root {
+            --bg: #111;
+            --surface: #1a1a1a;
+            --surface-hover: #222;
+            --border: #2a2a2a;
+            --text: #d4d4d4;
+            --text-dim: #666;
+            --text-bright: #fff;
+            --accent: #c49a6c;
+            --accent-dim: #8a6d4a;
+            --accent-glow: rgba(196, 154, 108, 0.1);
+            --accent-blue: #6c9ac4;
+            --accent-blue-dim: #4a6d8a;
+            --accent-blue-glow: rgba(108, 154, 196, 0.1);
+            --green: #5a9a5a;
+            --red: #9a5a5a;
+            --yellow: #9a9a5a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        header {
+            border-bottom: 1px solid var(--border);
+            padding: 0.75rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: var(--bg);
+            z-index: 100;
+        }
+        header h1 {
+            font-size: 0.85rem;
+            font-weight: 400;
+            letter-spacing: 0.15em;
+            color: var(--text-dim);
+        }
+        header h1 span { color: var(--accent); }
+        nav { display: flex; gap: 0.25rem; }
+        nav a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.8rem;
+            padding: 0.3rem 0.75rem;
+            border-radius: 3px;
+            transition: all 0.15s;
+        }
+        nav a:hover { color: var(--text); background: var(--surface); }
+        nav a.active { color: var(--accent); background: var(--accent-glow); }
+        main { padding: 1.5rem 2rem; max-width: 1400px; margin: 0 auto; }
+        h2 { font-weight: 400; font-size: 0.9rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem; }
+        .grid { display: grid; gap: 1rem; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1rem;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .card-header h3 {
+            font-weight: 400;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .stat-value { font-size: 1.8rem; color: var(--accent); font-weight: 300; }
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); }
+        .tag {
+            display: inline-block;
+            background: var(--accent-dim);
+            color: var(--text);
+            padding: 0.1rem 0.5rem;
+            border-radius: 2px;
+            font-size: 0.7rem;
+            margin-right: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+        .tag-remove {
+            cursor: pointer;
+            margin-left: 0.3rem;
+            opacity: 0.6;
+        }
+        .tag-remove:hover { opacity: 1; }
+        .dim { color: var(--text-dim); font-size: 0.8rem; }
+        .status-dot {
+            display: inline-block;
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            margin-right: 0.4rem;
+            vertical-align: middle;
+        }
+        .status-dot.on { background: var(--green); box-shadow: 0 0 4px var(--green); }
+        .status-dot.off { background: var(--red); }
+        .status-dot.paused { background: var(--yellow); }
+        button, .btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.4rem 0.8rem;
+            border-radius: 3px;
+            font-family: inherit;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        button:hover, .btn:hover { background: var(--surface-hover); border-color: var(--accent-dim); }
+        button.active { background: var(--accent-dim); border-color: var(--accent); color: var(--text-bright); }
+        input[type="text"], input[type="search"], textarea, select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.4rem 0.6rem;
+            border-radius: 3px;
+            font-family: inherit;
+            font-size: 0.8rem;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        input[type="text"]:focus, input[type="search"]:focus, textarea:focus, select:focus {
+            border-color: var(--accent-dim);
+        }
+        textarea { resize: vertical; min-height: 80px; width: 100%; }
+        select { cursor: pointer; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .session-card { margin-bottom: 0.75rem; }
+        .session-card:last-child { margin-bottom: 0; }
+        .speaking-bar {
+            display: flex;
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            background: var(--border);
+        }
+        .speaking-bar .you { background: var(--accent); }
+        .speaking-bar .remote { background: var(--accent-blue); }
+        .speaker-you { color: var(--accent); }
+        .speaker-remote { color: var(--accent-blue); }
+        .timeline-segment {
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .timeline-segment:last-child { border-bottom: none; }
+        .timeline-ts {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-right: 0.5rem;
+        }
+        .star-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0;
+            opacity: 0.3;
+            transition: opacity 0.15s;
+        }
+        .star-btn:hover { opacity: 0.7; background: none; border: none; }
+        .star-btn.starred { opacity: 1; }
+        .owner-pill {
+            display: inline-block;
+            padding: 0.05rem 0.4rem;
+            border-radius: 2px;
+            font-size: 0.65rem;
+            font-weight: 600;
+        }
+        .owner-pill.you { background: var(--accent-glow); color: var(--accent); }
+        .owner-pill.remote { background: var(--accent-blue-glow); color: var(--accent-blue); }
+        .owner-pill.both { background: rgba(90, 154, 90, 0.1); color: var(--green); }
+        .action-done { text-decoration: line-through; opacity: 0.5; }
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline; }
+        .htmx-request.htmx-indicator { display: inline; }
+        .analysis-content h2 { font-size: 0.85rem; margin-top: 1.2rem; margin-bottom: 0.5rem; color: var(--text); text-transform: none; letter-spacing: normal; }
+        .analysis-content h2:first-child { margin-top: 0; }
+        .analysis-content ul { padding-left: 1.2rem; margin-bottom: 0.5rem; }
+        .analysis-content li { margin-bottom: 0.25rem; }
+        .analysis-content p { margin-bottom: 0.5rem; }
+        .heatmap-cell {
+            width: 14px; height: 14px;
+            border-radius: 2px;
+            display: inline-block;
+        }
+        @media (max-width: 768px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            main { padding: 1rem; }
+            header { padding: 0.75rem 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1><span>SCRIBE</span></h1>
+        <nav>
+            <a href="/" class="{{ 'active' if page == 'home' }}">home</a>
+            <a href="/sessions" class="{{ 'active' if page == 'sessions' }}">sessions</a>
+            <a href="/analytics" class="{{ 'active' if page == 'analytics' }}">analytics</a>
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
