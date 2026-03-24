@@ -1,0 +1,16 @@
+{% if archived %}
+{% for name in archived %}
+<div class="card session-card" style="opacity: 0.6;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span class="dim">{{ name }}</span>
+        <button class="btn" style="font-size: 0.7rem; color: var(--green); border-color: var(--green);"
+                hx-post="/api/sessions/{{ name }}/unarchive"
+                hx-swap="none">
+            restore
+        </button>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<p class="dim">No archived sessions.</p>
+{% endif %}

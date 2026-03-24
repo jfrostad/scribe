@@ -153,8 +153,21 @@ def _auto_transcribe(session_dir: Path, config: AppConfig) -> None:
     mic_path = session_dir / "mic.wav"
     sys_path = session_dir / "system.wav"
 
+    # Echo cancellation if both streams exist
+    cleaned_path = None
+    if mic_path.exists() and sys_path.exists():
+        from scribe.echo_cancel import cancel_echo
+        logger.info("Running echo cancellation...")
+        cleaned_path = session_dir / "mic_cleaned.wav"
+        try:
+            cancel_echo(mic_path, sys_path, cleaned_path)
+        except Exception as e:
+            logger.warning(f"Echo cancellation failed: {e}, using raw mic")
+            cleaned_path = None
+
     if mic_path.exists():
-        mic_result = transcribe(mic_path, config.whisper)
+        transcribe_path = cleaned_path if cleaned_path else mic_path
+        mic_result = transcribe(transcribe_path, config.whisper)
         logger.info(f"  Mic: {len(mic_result['words'])} words")
 
     if sys_path.exists():
@@ -162,6 +175,12 @@ def _auto_transcribe(session_dir: Path, config: AppConfig) -> None:
         logger.info(f"  System: {len(sys_result['words'])} words")
 
     timeline = merge_transcripts(mic_result, sys_result)
+
+    # Gate echo-bleed segments
+    if cleaned_path and cleaned_path.exists():
+        from scribe.echo_cancel import gate_segments
+        timeline = gate_segments(timeline, mic_path, cleaned_path)
+
     duration = max((seg["end"] for seg in timeline), default=0.0)
 
     # Extract display name from session dir

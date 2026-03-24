@@ -32,4 +32,15 @@
 {% include "fragments/session_card.html" %}
 </div>
 
+<!-- Archived sessions (collapsed by default) -->
+<div style="margin-top: 2rem;">
+    <h2 style="cursor: pointer;"
+        onclick="let el=document.getElementById('archived-area'); if(el.style.display==='none'){el.style.display='block'; htmx.ajax('GET','/api/fragments/archived-list',{target:'#archived-area',swap:'innerHTML'})}else{el.style.display='none'}">
+        Archived &#9662;
+    </h2>
+    <div id="archived-area" style="display: none;">
+        <p class="dim">Loading...</p>
+    </div>
+</div>
+
 {% endblock %}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -325,6 +326,53 @@ class SessionIndex:
             "tag_counts": sorted(tag_counts.items(), key=lambda x: -x[1]),
             "type_counts": sorted(type_counts.items(), key=lambda x: -x[1]),
         }
+
+    def delete_session(self, dir_name: str) -> bool:
+        """Permanently delete a session directory."""
+        session = self.sessions.get(dir_name)
+        if not session:
+            return False
+        session_dir = Path(session.dir_path)
+        if session_dir.exists():
+            shutil.rmtree(session_dir)
+        del self.sessions[dir_name]
+        logger.info(f"Deleted session {dir_name}")
+        return True
+
+    def archive_session(self, dir_name: str) -> bool:
+        """Move a session to recordings/archive/."""
+        session = self.sessions.get(dir_name)
+        if not session:
+            return False
+        session_dir = Path(session.dir_path)
+        archive_dir = self.recordings_dir / "archive" / dir_name
+        archive_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(session_dir), str(archive_dir))
+        del self.sessions[dir_name]
+        logger.info(f"Archived session {dir_name} → {archive_dir}")
+        return True
+
+    def unarchive_session(self, dir_name: str) -> bool:
+        """Move a session back from archive."""
+        archive_dir = self.recordings_dir / "archive" / dir_name
+        if not archive_dir.exists():
+            return False
+        target_dir = self.recordings_dir / dir_name
+        shutil.move(str(archive_dir), str(target_dir))
+        # Reload into index
+        self.reload_session(dir_name)
+        logger.info(f"Unarchived session {dir_name}")
+        return True
+
+    def list_archived(self) -> list[str]:
+        """List archived session directory names."""
+        archive_dir = self.recordings_dir / "archive"
+        if not archive_dir.exists():
+            return []
+        return sorted(
+            [d.name for d in archive_dir.iterdir() if d.is_dir()],
+            reverse=True,
+        )
 
     def all_tags(self) -> list[str]:
         """All unique tags across sessions."""

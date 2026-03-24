@@ -105,14 +105,24 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
         print(f"No audio files found in {session_dir}", file=sys.stderr)
         sys.exit(1)
 
+    # Echo cancellation if both streams exist and not skipped
+    cleaned_path = None
+    if mic_path.exists() and sys_path.exists() and not args.no_echo_cancel:
+        from scribe.echo_cancel import cancel_echo
+        print("Running echo cancellation...")
+        cleaned_path = session_dir / "mic_cleaned.wav"
+        cancel_echo(mic_path, sys_path, cleaned_path)
+
     print("Transcribing...")
 
     mic_result = {"text": "", "segments": [], "words": []}
     sys_result = {"text": "", "segments": [], "words": []}
 
     if mic_path.exists():
-        print(f"  Mic audio: {mic_path.name}")
-        mic_result = transcribe(mic_path, config.whisper)
+        # Transcribe the cleaned mic if echo cancellation was run
+        transcribe_path = cleaned_path if cleaned_path else mic_path
+        print(f"  Mic audio: {transcribe_path.name}")
+        mic_result = transcribe(transcribe_path, config.whisper)
         print(f"    → {len(mic_result['words'])} words")
 
     if sys_path.exists():
@@ -122,6 +132,12 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
 
     # Merge into timeline
     timeline = merge_transcripts(mic_result, sys_result)
+
+    # Gate echo-bleed segments if echo cancellation was run
+    if cleaned_path and cleaned_path.exists():
+        from scribe.echo_cancel import gate_segments
+        print("  Gating echo-bleed segments...")
+        timeline = gate_segments(timeline, mic_path, cleaned_path)
 
     # Calculate duration from last segment end
     duration = 0.0
@@ -203,17 +219,25 @@ def cmd_run(args: argparse.Namespace) -> None:
     while not stopped:
         signal.pause()
 
-    # Phase 2: Transcribe
+    # Phase 2: Echo cancellation + Transcribe
+    mic_path = session_dir / "mic.wav"
+    sys_path = session_dir / "system.wav"
+
+    cleaned_path = None
+    if mic_path.exists() and sys_path.exists() and not args.no_echo_cancel:
+        from scribe.echo_cancel import cancel_echo
+        print("\nRunning echo cancellation...")
+        cleaned_path = session_dir / "mic_cleaned.wav"
+        cancel_echo(mic_path, sys_path, cleaned_path)
+
     print("\nTranscribing...")
 
     mic_result = {"text": "", "segments": [], "words": []}
     sys_result = {"text": "", "segments": [], "words": []}
 
-    mic_path = session_dir / "mic.wav"
-    sys_path = session_dir / "system.wav"
-
     if mic_path.exists():
-        mic_result = transcribe(mic_path, config.whisper)
+        transcribe_path = cleaned_path if cleaned_path else mic_path
+        mic_result = transcribe(transcribe_path, config.whisper)
         print(f"  Mic: {len(mic_result['words'])} words")
 
     if sys_path.exists():
@@ -221,6 +245,12 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"  System: {len(sys_result['words'])} words")
 
     timeline = merge_transcripts(mic_result, sys_result)
+
+    if cleaned_path and cleaned_path.exists():
+        from scribe.echo_cancel import gate_segments
+        print("  Gating echo-bleed segments...")
+        timeline = gate_segments(timeline, mic_path, cleaned_path)
+
     duration = max((seg["end"] for seg in timeline), default=0.0)
 
     display_name = name
@@ -297,6 +327,8 @@ def main() -> None:
     # transcribe
     p_trans = sub.add_parser("transcribe", help="Transcribe a recorded session")
     p_trans.add_argument("session_dir", help="Path to session directory")
+    p_trans.add_argument("--no-echo-cancel", action="store_true",
+                         help="Skip echo cancellation (use with headphones)")
 
     # analyze
     p_analyze = sub.add_parser("analyze", help="Run Claude analysis on transcript")
@@ -305,6 +337,8 @@ def main() -> None:
     # run
     p_run = sub.add_parser("run", help="Record → transcribe → analyze")
     p_run.add_argument("--name", "-n", default=None, help="Session name")
+    p_run.add_argument("--no-echo-cancel", action="store_true",
+                         help="Skip echo cancellation (use with headphones)")
 
     # watch
     p_watch = sub.add_parser("watch", help="Auto-record Zoom/Teams calls")

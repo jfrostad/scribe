@@ -141,4 +141,34 @@
     {% endfor %}
 </div>
 
+<!-- Archive / Delete -->
+<div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem;">
+    <button class="btn"
+            style="color: var(--yellow); border-color: var(--yellow);"
+            hx-post="/api/sessions/{{ session.dir_name }}/archive"
+            hx-swap="none">
+        archive
+    </button>
+    <button class="btn" id="delete-btn"
+            style="color: var(--red); border-color: var(--red);"
+            onclick="
+                if (this.dataset.confirmed) {
+                    fetch('/api/sessions/{{ session.dir_name }}', {method:'DELETE', headers:{'HX-Request':'true'}})
+                    .then(r => { window.location.href = '/sessions'; });
+                } else {
+                    this.dataset.confirmed = 'true';
+                    this.textContent = 'confirm delete';
+                    this.style.background = 'var(--red)';
+                    this.style.color = 'var(--text-bright)';
+                    setTimeout(() => {
+                        this.dataset.confirmed = '';
+                        this.textContent = 'delete';
+                        this.style.background = '';
+                        this.style.color = 'var(--red)';
+                    }, 5000);
+                }">
+        delete
+    </button>
+</div>
+
 {% endblock %}

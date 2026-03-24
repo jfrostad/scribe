@@ -41,6 +41,39 @@ async def update_session(request: Request, dir_name: str):
     return {"ok": True}
 
 
+# --- Delete / Archive ---
+
+@router.delete("/sessions/{dir_name}")
+async def delete_session_endpoint(request: Request, dir_name: str):
+    index = _get_index(request)
+    if not index.delete_session(dir_name):
+        return HTMLResponse("not found", status_code=404)
+    return HTMLResponse(headers={"HX-Redirect": "/sessions"})
+
+
+@router.post("/sessions/{dir_name}/archive")
+async def archive_session_endpoint(request: Request, dir_name: str):
+    index = _get_index(request)
+    if not index.archive_session(dir_name):
+        return HTMLResponse("not found", status_code=404)
+    return HTMLResponse(headers={"HX-Redirect": "/sessions"})
+
+
+@router.post("/sessions/{dir_name}/unarchive")
+async def unarchive_session_endpoint(request: Request, dir_name: str):
+    index = _get_index(request)
+    if not index.unarchive_session(dir_name):
+        return HTMLResponse("not found", status_code=404)
+    return HTMLResponse(headers={"HX-Redirect": "/sessions"})
+
+
+@router.get("/fragments/archived-list")
+async def archived_list_fragment(request: Request):
+    index = _get_index(request)
+    archived = index.list_archived()
+    return _fragment(request, "fragments/archived_list.html", archived=archived)
+
+
 # --- Action items ---
 
 @router.get("/fragments/action-items/{dir_name}")
