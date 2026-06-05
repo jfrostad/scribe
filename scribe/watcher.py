@@ -16,6 +16,7 @@ When the call ends, stops recording and kicks off transcribe + analyze.
 from __future__ import annotations
 
 import logging
+import shutil
 import subprocess
 import time
 from datetime import date
@@ -30,6 +31,11 @@ POLL_INTERVAL = 5  # seconds
 END_GRACE_POLLS = 6  # 30 seconds grace period
 # Idle Teams has ~1 UDP socket; active call has 10+
 TEAMS_UDP_THRESHOLD = 4
+# After this many consecutive failed recording starts, back off exponentially
+# instead of retrying every POLL_INTERVAL. A persistently unavailable audio
+# device previously caused a tight retry loop that exhausted file descriptors.
+FAILURE_BACKOFF_THRESHOLD = 3
+FAILURE_BACKOFF_MAX = 300  # cap backoff at 5 minutes
 
 
 def _detect_zoom_call() -> bool:
@@ -90,6 +96,8 @@ def watch(config: AppConfig, transcribe_after: bool = True, analyze_after: bool 
     logger.info(f"  Auto-transcribe: {transcribe_after}")
     logger.info(f"  Auto-analyze: {analyze_after}")
 
+    consecutive_failures = 0
+
     while True:
         # Wait for a call to start
         app = _detect_active_call()
@@ -108,9 +116,30 @@ def watch(config: AppConfig, transcribe_after: bool = True, analyze_after: bool 
         try:
             recorder.start()
         except Exception as e:
-            logger.error(f"Failed to start recording: {e}")
-            time.sleep(POLL_INTERVAL)
+            consecutive_failures += 1
+            logger.error(
+                f"Failed to start recording (attempt {consecutive_failures}): {e}"
+            )
+            # The recorder releases its own handles on a failed start; just
+            # drop the empty session dir so we don't litter recordings/.
+            shutil.rmtree(session_dir, ignore_errors=True)
+
+            if consecutive_failures >= FAILURE_BACKOFF_THRESHOLD:
+                backoff = min(
+                    FAILURE_BACKOFF_MAX,
+                    POLL_INTERVAL * 2 ** (consecutive_failures - FAILURE_BACKOFF_THRESHOLD + 1),
+                )
+                logger.warning(
+                    f"{consecutive_failures} consecutive recording failures; "
+                    f"backing off {backoff}s (audio device may be unavailable)"
+                )
+                time.sleep(backoff)
+            else:
+                time.sleep(POLL_INTERVAL)
             continue
+
+        # Recording started cleanly — reset the failure backoff.
+        consecutive_failures = 0
 
         # Wait for the call to end (with grace period to handle flickers)
         no_call_count = 0
@@ -127,6 +156,16 @@ def watch(config: AppConfig, transcribe_after: bool = True, analyze_after: bool 
         # Call ended — stop recording
         recorder.stop()
         logger.info(f"Call ended — recording saved to {session_dir}")
+
+        # Check minimum recording duration (skip false triggers)
+        import soundfile as sf
+        mic_path = session_dir / "mic.wav"
+        if mic_path.exists():
+            info = sf.info(str(mic_path))
+            if info.duration < 60:
+                logger.info(f"Recording too short ({info.duration:.0f}s < 60s), cleaning up")
+                shutil.rmtree(session_dir)
+                continue
 
         # Post-processing
         if transcribe_after:
@@ -193,6 +232,10 @@ def _auto_transcribe(session_dir: Path, config: AppConfig) -> None:
         session_dir, display_name, duration,
     )
     logger.info(f"  Transcript: {md_path}")
+
+    if config.compression.enabled:
+        from scribe.compress import compress_session_audio
+        compress_session_audio(session_dir, config.compression)
 
 
 def _auto_analyze(session_dir: Path, config: AppConfig) -> None:

@@ -77,39 +77,50 @@ class DualRecorder:
         self._running = False
 
     def start(self) -> None:
-        """Open both audio streams and start writing to disk."""
+        """Open both audio streams and start writing to disk.
+
+        If opening any stream fails partway through, every handle opened so
+        far is released before the error propagates. Otherwise a failing
+        device (e.g. PortAudio -9986) would leak file descriptors on each
+        retry until the process hits "Too many open files".
+        """
         self.output_dir.mkdir(parents=True, exist_ok=True)
         sr = self.config.sample_rate
         ch = self.config.channels
 
-        # Mic stream
-        self._mic_writer = StreamWriter(self.output_dir / "mic.wav", sr, ch)
-        self._mic_writer.start()
+        try:
+            # Mic stream
+            self._mic_writer = StreamWriter(self.output_dir / "mic.wav", sr, ch)
+            self._mic_writer.start()
 
-        self._mic_stream = sd.InputStream(
-            samplerate=sr,
-            channels=ch,
-            dtype="float32",
-            device=self.config.mic_device,
-            blocksize=1024,
-            callback=self._mic_callback,
-        )
+            self._mic_stream = sd.InputStream(
+                samplerate=sr,
+                channels=ch,
+                dtype="float32",
+                device=self.config.mic_device,
+                blocksize=1024,
+                callback=self._mic_callback,
+            )
 
-        # System audio stream
-        self._sys_writer = StreamWriter(self.output_dir / "system.wav", sr, ch)
-        self._sys_writer.start()
+            # System audio stream
+            self._sys_writer = StreamWriter(self.output_dir / "system.wav", sr, ch)
+            self._sys_writer.start()
 
-        self._sys_stream = sd.InputStream(
-            samplerate=sr,
-            channels=ch,
-            dtype="float32",
-            device=self.config.system_device,
-            blocksize=1024,
-            callback=self._sys_callback,
-        )
+            self._sys_stream = sd.InputStream(
+                samplerate=sr,
+                channels=ch,
+                dtype="float32",
+                device=self.config.system_device,
+                blocksize=1024,
+                callback=self._sys_callback,
+            )
 
-        self._mic_stream.start()
-        self._sys_stream.start()
+            self._mic_stream.start()
+            self._sys_stream.start()
+        except Exception:
+            self._teardown()
+            raise
+
         self._running = True
 
         mic_name = self.config.mic_device or "system default"
@@ -131,19 +142,31 @@ class DualRecorder:
     def stop(self) -> None:
         """Stop recording and close all streams."""
         self._running = False
+        self._teardown()
+        logger.info(f"Recording saved to {self.output_dir}")
 
+    def _teardown(self) -> None:
+        """Release all streams and writer threads. Safe to call repeatedly
+        and on a partially-started recorder (each handle is guarded)."""
         for stream in (self._mic_stream, self._sys_stream):
             if stream:
-                stream.stop()
-                stream.close()
+                try:
+                    stream.stop()
+                    stream.close()
+                except Exception as e:  # never let cleanup mask the original error
+                    logger.warning(f"Error closing audio stream: {e}")
 
         for writer in (self._mic_writer, self._sys_writer):
             if writer:
-                writer.stop()
+                try:
+                    writer.stop()
+                except Exception as e:
+                    logger.warning(f"Error stopping writer: {e}")
 
         self._mic_stream = None
         self._sys_stream = None
-        logger.info(f"Recording saved to {self.output_dir}")
+        self._mic_writer = None
+        self._sys_writer = None
 
     @property
     def is_running(self) -> bool:
